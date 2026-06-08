@@ -1,10 +1,12 @@
 clear all
 close all
+restoredefaultpath
 clc
 
 rng('shuffle');
 
 addpath('/Users/avinashranjan/Desktop/UT Austin/Goris lab/Model_V1_damage/V1DamageModel/Scripts/')
+addpath('/Users/gorislab/Desktop/Ranjan Workspace/RNN_V1Damage/V1DamageModel/Scripts/')
 
 % ----------------------------------
 % Params
@@ -62,6 +64,7 @@ xline(90, LineWidth=1.5, LineStyle="--")
 ylim([0 1])
 xlabel('Orientation')
 ylabel('P(CW)')
+title('Intact V1')
 
 subplot(3, 5, 2)
 scatter(rad2deg(uniqStimOris), psycFns(2, :), 200*(choiceCounts(1, :)+eps), 'filled', 'DisplayName', 'HC', MarkerFaceColor='blue');
@@ -101,77 +104,113 @@ ylim([0 1])
 xlabel('P(CW)')
 ylabel('P(HC)')
 
-% % Damaged
-% [psycFns, confFn, choiceCounts] = getPsychometricData( ...
-%     trialDecisionsDamaged, ...
-%     trialConfsDamaged, ...
-%     stimParam, ...
-%     uniqStimOris, ...
-%     trlStimVector);
-% 
-% subplot(3, 5, 6)
-% plot(rad2deg(uniqStimOris), psycFns(1, :))
-% ylim([0 1])
-% xlabel('Orientation')
-% ylabel('P(CW)')
-% 
-% subplot(3, 5, 7)
-% scatter(rad2deg(uniqStimOris), psycFns(2, :), 200*(choiceCounts(1, :)+eps), 'filled', 'DisplayName', 'HC');
-% hold on
-% scatter(rad2deg(uniqStimOris), psycFns(3, :), 200*(choiceCounts(2, :)+eps), 'filled', 'DisplayName', 'LC')
-% hold off
-% ylim([0 1])
-% xlabel('Orientation')
-% ylabel('P(CW)')
-% legend
-% 
-% subplot(3, 5, 8)
-% plot(rad2deg(uniqStimOris), confFn)
-% ylim([0 1])
-% xlabel('Orientation')
-% ylabel('P(HC)')
-% 
-% subplot(3, 5, 9)
-% scatter(psycFns(1, :), confFn)
-% ylim([0 1])
-% xlabel('P(CW)')
-% ylabel('P(HC)')
-% 
-% % Adjusted
-% [psycFns, confFn, choiceCounts] = getPsychometricData( ...
-%     trialDecisionsAdjusted, ...
-%     trialConfsAdjusted, ...
-%     stimParam, ...
-%     uniqStimOris, ...
-%     trlStimVector);
-% 
-% subplot(3, 5, 11)
-% plot(rad2deg(uniqStimOris), psycFns(1, :))
-% ylim([0 1])
-% xlabel('Orientation')
-% ylabel('P(CW)')
-% 
-% subplot(3, 5, 12)
-% scatter(rad2deg(uniqStimOris), psycFns(2, :), 200*(choiceCounts(1, :)+eps), 'filled', 'DisplayName', 'HC');
-% hold on
-% scatter(rad2deg(uniqStimOris), psycFns(3, :), 200*(choiceCounts(2, :)+eps), 'filled', 'DisplayName', 'LC')
-% hold off
-% ylim([0 1])
-% xlabel('Orientation')
-% ylabel('P(CW)')
-% legend
-% 
-% subplot(3, 5, 13)
-% plot(rad2deg(uniqStimOris), confFn)
-% ylim([0 1])
-% xlabel('Orientation')
-% ylabel('P(HC)')
-% 
-% subplot(3, 5, 14)
-% scatter(psycFns(1, :), confFn)
-% ylim([0 1])
-% xlabel('P(CW)')
-% ylabel('P(HC)')
+% Damaged
+[psycFns, confFn, choiceCounts] = getPsychometricData( ...
+    trialDecisionsDamaged, ...
+    trialConfsDamaged, ...
+    stimParam, ...
+    uniqStimOris, ...
+    trlStimVector);
+
+subplot(3, 5, 6)
+plot(rad2deg(uniqStimOris), psycFns(1, :))
+xline(90, LineWidth=1.5, LineStyle="--")
+ylim([0 1])
+xlabel('Orientation')
+ylabel('P(CW)')
+title('Damaged V1')
+
+subplot(3, 5, 7)
+scatter(rad2deg(uniqStimOris), psycFns(2, :), 200*(choiceCounts(1, :)+eps), 'filled', 'DisplayName', 'HC', MarkerFaceColor='blue');
+hold on
+scatter(rad2deg(uniqStimOris), psycFns(3, :), 200*(choiceCounts(2, :)+eps), 'filled', 'DisplayName', 'LC', MarkerFaceColor='red')
+xline(90, LineWidth=1.5, LineStyle="--", HandleVisibility='off')
+plot(rad2deg(uniqStimOris), psycFns(2, :), Color='blue', HandleVisibility='off');
+plot(rad2deg(uniqStimOris), psycFns(3, :), Color='red', HandleVisibility='off');
+hold off
+ylim([0 1])
+xlabel('Orientation')
+ylabel('P(CW)')
+legend
+
+subplot(3, 5, 8)
+plot(rad2deg(uniqStimOris), confFn)
+ylim([0 1])
+xlabel('Orientation')
+ylabel('P(HC)')
+
+subplot(3, 5, 9)
+scatter(psycFns(1, :), confFn)
+ylim([0 1])
+xlabel('P(CW)')
+ylabel('P(HC)')
+
+subplot(3, 5, 10)
+scatter(rad2deg(uniqStimOris), psycFns(4, :), 200*(choiceCounts(3, :)+eps), 'filled', 'DisplayName', 'HC', MarkerFaceColor='blue');
+hold on
+scatter(rad2deg(uniqStimOris), psycFns(5, :), 200*(choiceCounts(4, :)+eps), 'filled', 'DisplayName', 'LC', MarkerFaceColor='red')
+xline(90, LineWidth=1.5, LineStyle="--", HandleVisibility='off')
+plot(rad2deg(uniqStimOris), psycFns(4, :), Color='blue', HandleVisibility='off');
+plot(rad2deg(uniqStimOris), psycFns(5, :), Color='red', HandleVisibility='off');
+hold off
+ylim([0 1])
+xlabel('Orientation')
+ylabel('P(CCW)')
+legend
+
+% Adjusted
+[psycFns, confFn, choiceCounts] = getPsychometricData( ...
+    trialDecisionsAdjusted, ...
+    trialConfsAdjusted, ...
+    stimParam, ...
+    uniqStimOris, ...
+    trlStimVector);
+
+subplot(3, 5, 11)
+plot(rad2deg(uniqStimOris), psycFns(1, :))
+xline(90, LineWidth=1.5, LineStyle="--")
+ylim([0 1])
+xlabel('Orientation')
+ylabel('P(CW)')
+title('Adjusted V1')
+
+subplot(3, 5, 12)
+scatter(rad2deg(uniqStimOris), psycFns(2, :), 200*(choiceCounts(1, :)+eps), 'filled', 'DisplayName', 'HC', MarkerFaceColor='blue');
+hold on
+scatter(rad2deg(uniqStimOris), psycFns(3, :), 200*(choiceCounts(2, :)+eps), 'filled', 'DisplayName', 'LC', MarkerFaceColor='red')
+xline(90, LineWidth=1.5, LineStyle="--", HandleVisibility='off')
+plot(rad2deg(uniqStimOris), psycFns(2, :), Color='blue', HandleVisibility='off');
+plot(rad2deg(uniqStimOris), psycFns(3, :), Color='red', HandleVisibility='off');
+hold off
+ylim([0 1])
+xlabel('Orientation')
+ylabel('P(CW)')
+legend
+
+subplot(3, 5, 13)
+plot(rad2deg(uniqStimOris), confFn)
+ylim([0 1])
+xlabel('Orientation')
+ylabel('P(HC)')
+
+subplot(3, 5, 14)
+scatter(psycFns(1, :), confFn)
+ylim([0 1])
+xlabel('P(CW)')
+ylabel('P(HC)')
+
+subplot(3, 5, 15)
+scatter(rad2deg(uniqStimOris), psycFns(4, :), 200*(choiceCounts(3, :)+eps), 'filled', 'DisplayName', 'HC', MarkerFaceColor='blue');
+hold on
+scatter(rad2deg(uniqStimOris), psycFns(5, :), 200*(choiceCounts(4, :)+eps), 'filled', 'DisplayName', 'LC', MarkerFaceColor='red')
+xline(90, LineWidth=1.5, LineStyle="--", HandleVisibility='off')
+plot(rad2deg(uniqStimOris), psycFns(4, :), Color='blue', HandleVisibility='off');
+plot(rad2deg(uniqStimOris), psycFns(5, :), Color='red', HandleVisibility='off');
+hold off
+ylim([0 1])
+xlabel('Orientation')
+ylabel('P(CCW)')
+legend
 
 %%
 function [psycFns, confFn, choiceCounts] = getPsychometricData( ...

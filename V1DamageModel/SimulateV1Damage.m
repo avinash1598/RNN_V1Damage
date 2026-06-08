@@ -6,6 +6,7 @@ clc
 rng('shuffle');
 
 addpath('/Users/avinashranjan/Desktop/UT Austin/Goris lab/Model_V1_damage/V1DamageModel/Scripts/')
+addpath('/Users/gorislab/Desktop/Ranjan Workspace/RNN_V1Damage/V1DamageModel/Scripts/')
 
 % ----------------------------------
 % Params
@@ -64,7 +65,6 @@ tuningFnsAdjusted = getTuningFns(tuningParamsAdjusted, contrasts(1), spreads(1),
 timeBins          = 0:timeStep:stimDuration; 
 stimRespProfile   = 1 + zeros(1, numel(timeBins));
 
-
 %% Structure to save data
 trialDecisions           = zeros(1, ntrials);
 trialDecisionsDamaged    = zeros(1, ntrials);
@@ -92,7 +92,7 @@ for trialIDx = 1:ntrials
     
     % TODO: need to save spikes
     
-    % Original V1 population
+    %% Original V1 population
     [spikes, pdf, ~, decision, conf, confVar] = decodeDecision( ...
         trlContrastVector(trialIDx), ...
         trlSpreadVector(trialIDx), ...
@@ -123,72 +123,85 @@ for trialIDx = 1:ntrials
     
     spikesIntactV1{trialIDx} = spikeCounts;
     
-%     % Damged V1 population
-%     [spikes, pdf, ~, decision, conf] = decodeDecision( ...
-%         trlContrastVector(trialIDx), ...
-%         trlSpreadVector(trialIDx), ...
-%         noisyStimVector(trialIDx), ...
-%         neuronsPrefOrientation, ...
-%         tuningParamsV1Damaged, ... % Spikes from damaged neural population
-%         stimRespProfile, ...
-%         timeStep, ...
-%         timeBins, ...
-%         nNeurons, ...
-%         stimDuration, ...
-%         tuningFnOriSpace, ...
-%         tuningFns); % Decoding with tuning functions from original V1 population 
-%     
-%     trialDecisionsDamaged(trialIDx) = decision;
-%     trialConfsDamaged(trialIDx)     = conf;
-%     trialPDFsDamaged{trialIDx}      = pdf;
-% 
-%     % Bin and then save spikes, Sum within each 10-ms bin
-%     binSize = 10; 
-%     nBins = floor(size(spikes, 2)/binSize);
-%     spikeCounts = squeeze(sum(reshape(spikes(:, 1:end-1),...
-%         nNeurons,binSize,nBins),2));
-% 
-% %     spikesDamagedV1{trialIDx} = spikeCounts;
-%     
-%     % Adjusted V1 population (Plasticity)
-%     [spikes, pdf, ~, decision, conf] = decodeDecision( ...
-%         trlContrastVector(trialIDx), ...
-%         trlSpreadVector(trialIDx), ...
-%         noisyStimVector(trialIDx), ...
-%         neuronsPrefOrientation(intactNrnIdxes), ...
-%         tuningParamsAdjusted, ... % Spikes from adjusted neural population
-%         stimRespProfile, ...
-%         timeStep, ...
-%         timeBins, ...
-%         numel(intactNrnIdxes), ...
-%         stimDuration, ...
-%         tuningFnOriSpace, ...
-%         tuningFnsAdjusted); % Decoding with tuning functions from adjusted V1 population 
-%     
-%     trialDecisionsAdjusted(trialIDx) = decision;
-%     trialConfsAdjusted(trialIDx)     = conf;
-%     trialPDFsAdjusted{trialIDx}      = pdf;
-%     
-%     % Bin and then save spikes, Sum within each 10-ms bin
-%     binSize = 10; 
-%     nBins = floor(size(spikes, 2)/binSize);
-%     spikeCounts = squeeze(sum(reshape(spikes(:, 1:end-1),...
-%         nNeurons,binSize,nBins),2));
-% 
-% %     spikesAdjustedV1{trialIDx} = spikeCounts;
+    %% Damged V1 population
+    [spikes, pdf, ~, decision, conf, confVar] = decodeDecision( ...
+        trlContrastVector(trialIDx), ...
+        trlSpreadVector(trialIDx), ...
+        noisyStimVector(trialIDx), ...
+        neuronsPrefOrientation, ...
+        tuningParamsV1Damaged, ... % Spikes from damaged neural population
+        stimRespProfile, ...
+        timeStep, ...
+        timeBins, ...
+        nNeurons, ...
+        stimDuration, ...
+        tuningFnOriSpace, ...
+        tuningFns); % Decoding with tuning functions from original V1 population 
+    
+    confVarsDamaged(trialIDx)       = confVar;
+    trialDecisionsDamaged(trialIDx) = decision;
+    trialConfsDamaged(trialIDx)     = conf;
+    trialPDFsDamaged{trialIDx}      = pdf;
+
+    % Bin and then save spikes, Sum within each 10-ms bin
+    binSize = 10; 
+    nBins = floor(size(spikes, 2)/binSize);
+    spikeCounts = squeeze(sum(reshape(spikes(:, 1:end-1),...
+        nNeurons,binSize,nBins),2));
+    
+    spikesDamagedV1{trialIDx} = spikeCounts;
+
+    %% Adjusted V1 population (Plasticity)
+    [spikes, pdf, ~, decision, conf, confVar] = decodeDecision( ...
+        trlContrastVector(trialIDx), ...
+        trlSpreadVector(trialIDx), ...
+        noisyStimVector(trialIDx), ...
+        neuronsPrefOrientation(intactNrnIdxes), ...
+        tuningParamsAdjusted, ... % Spikes from adjusted neural population
+        stimRespProfile, ...
+        timeStep, ...
+        timeBins, ...
+        numel(intactNrnIdxes), ...
+        stimDuration, ...
+        tuningFnOriSpace, ...
+        tuningFnsAdjusted); % Decoding with tuning functions from adjusted V1 population 
+
+    confVarsAdjusted(trialIDx)       = confVar;
+    trialDecisionsAdjusted(trialIDx) = decision;
+    trialConfsAdjusted(trialIDx)     = conf;
+    trialPDFsAdjusted{trialIDx}      = pdf;
+
+    % Bin and then save spikes, Sum within each 10-ms bin
+    binSize = 10; 
+    nBins = floor(size(spikes, 2)/binSize);
+    spikeCounts = squeeze(sum(reshape(spikes(:, 1:end-1),...
+        numel(intactNrnIdxes),binSize,nBins),2));
+
+    spikesAdjustedV1{trialIDx} = spikeCounts;
     
 end
 
-% Generate test trials
-stimNoise         = 0 + 0.1 * randn(ntrials, 1); % What is std dev here? 5.73 degrees
-noisyStimVector   = trlStimVector + stimNoise;   % Noisy stimulus vector
-noisyStimVector   = deg2rad( mod(rad2deg(noisyStimVector), 180) ); % Wrap between 0 and 180
+%% Generate test dataset for intact population and damaged population
 
-trialDecisionsTest           = zeros(1, ntrials);
-trialConfsTest               = zeros(1, ntrials);
-trialConfVarsTest            = zeros(1, ntrials);
-spikesIntactV1Test           = cell(1, ntrials);
-trialPDFsTest                = cell(1, ntrials);
+stimNoise                           = 0 + 0.1 * randn(ntrials, 1);                       % What is std dev here? 5.73 degrees
+noisyStimVectorTest                 = trlStimVector + stimNoise;                         % Noisy stimulus vector
+noisyStimVectorTest                 = deg2rad( mod(rad2deg(noisyStimVectorTest), 180) ); % Wrap between 0 and 180
+
+trialDecisionsTest                  = zeros(1, ntrials);
+trialConfsTest                      = zeros(1, ntrials);
+trialConfVarsTest                   = zeros(1, ntrials);
+spikesIntactV1Test                  = cell(1, ntrials);
+trialPDFsTest                       = cell(1, ntrials);
+
+stimNoise                           = 0 + 0.1 * randn(ntrials, 1);                       % What is std dev here? 5.73 degrees
+noisyStimVectorDamagedTest          = trlStimVector + stimNoise;                         % Noisy stimulus vector
+noisyStimVectorDamagedTest          = deg2rad( mod(rad2deg(noisyStimVectorDamagedTest), 180) ); % Wrap between 0 and 180
+
+trialDecisionsDamagedTest           = zeros(1, ntrials);
+trialConfsDamagedTest               = zeros(1, ntrials);
+trialConfVarsDamagedTest            = zeros(1, ntrials);
+spikesV1DamagedTest                 = cell(1, ntrials);
+trialPDFsDamagedTest                = cell(1, ntrials);
 
 for trialIDx = 1:ntrials
 
@@ -198,7 +211,7 @@ for trialIDx = 1:ntrials
     
     % TODO: need to save spikes
     
-    % Original V1 population
+    %% Original V1 population
     [spikes, pdf, ~, decision, conf, confVar] = decodeDecision( ...
         trlContrastVector(trialIDx), ...
         trlSpreadVector(trialIDx), ...
@@ -228,13 +241,53 @@ for trialIDx = 1:ntrials
         nNeurons,binSize,nBins),2));
     
     spikesIntactV1Test{trialIDx} = spikeCounts;
+
+    %% Damaged V1 population
+    [spikes, pdf, ~, decision, conf, confVar] = decodeDecision( ...
+        trlContrastVector(trialIDx), ...
+        trlSpreadVector(trialIDx), ...
+        noisyStimVector(trialIDx), ...
+        neuronsPrefOrientation, ...
+        tuningParamsV1Damaged, ...
+        stimRespProfile, ...
+        timeStep, ...
+        timeBins, ...
+        nNeurons, ...
+        stimDuration, ...
+        tuningFnOriSpace, ...
+        tuningFns);
+    
+    trialDecisionsDamagedTest(trialIDx) = decision;
+    trialConfsDamagedTest(trialIDx)     = conf;
+    trialPDFsDamagedTest{trialIDx}      = pdf;
+    trialConfVarsDamagedTest(trialIDx)  = confVar;
+    
+    % Bin and then save spikes, Sum within each 10-ms bin
+    binSize     = 10; 
+    nBins       = floor(size(spikes, 2)/binSize);
+    spikeCounts = squeeze(sum(reshape(spikes(:, 1:end-1),...
+        nNeurons, binSize, nBins),2));
+    
+    spikesV1DamagedTest{trialIDx} = spikeCounts;
 end
 
 %% Save data
 
 % Compute trial confidence
+% Keep cc same for all different networks
+% Choice-consistency relation can be impacted by either meta-uncertainty of
+% confidence criteria. Our objective is to see whether meta-uncertainty is
+% impacted by V1 damage. Give that Cc can be confound, it's better to keep
+% Cc contasnt across all network simulations.
+
 Cc                            = median(confVars); % x = confVars(trlStimVector == pi/2); 
 trialConfs                    = confVars > Cc;
+
+%Cc                            = median(confVarsDamaged); % x = confVars(trlStimVector == pi/2); 
+trialConfsDamaged             = confVarsDamaged > Cc;
+
+%Cc                            = median(confVarsAdjusted); % x = confVars(trlStimVector == pi/2); 
+trialConfsAdjusted            = confVarsAdjusted > Cc;
 
 data.trialDecisions           = trialDecisions;
 data.trialDecisionsDamaged    = trialDecisionsDamaged;
@@ -264,18 +317,28 @@ data.countPerStim             = stimParam.countPerStim;
 data.damagedNrnIdxes          = damagedNrnIdxes;
 data.intactNrnIdxes           = intactNrnIdxes;
 
-save('SpikeData.mat', 'data');
+save('SpikeData.mat', 'data', '-v7.3');
 
 % Compute trial confidence
-Cc                            = median(trialConfVarsTest); % x = trialConfVarsTest(trlStimVector == pi/2); 
-trialConfsTest                = trialConfVarsTest > Cc;
+Cc                                = median(trialConfVarsTest); % x = trialConfVarsTest(trlStimVector == pi/2); 
+trialConfsTest                    = trialConfVarsTest > Cc;
 
+Cc                                = median(trialConfVarsDamagedTest); % x = trialConfVarsTest(trlStimVector == pi/2); 
+trialConfsDamagedTest             = trialConfVarsDamagedTest > Cc;
+
+dataTest.noisyStimVectorTest      = noisyStimVectorTest;
 dataTest.trialDecisionsTest       = trialDecisionsTest;
 dataTest.trialConfsTest           = trialConfsTest;
 dataTest.trialPDFsTest            = trialPDFsTest;
 dataTest.spikesIntactV1Test       = spikesIntactV1Test;
 
-save('SpikeDataTest.mat', 'dataTest');
+dataTest.noisyStimVectorDamagedTest      = noisyStimVectorDamagedTest;
+dataTest.trialDecisionsDamagedTest       = trialDecisionsDamagedTest;
+dataTest.trialConfsDamagedTest           = trialConfsDamagedTest;
+dataTest.trialPDFsDamagedTest            = trialPDFsDamagedTest;
+dataTest.spikesV1DamagedTest             = spikesV1DamagedTest;
+
+save('SpikeDataTest.mat', 'dataTest', '-v7.3');
 
 %% Utility function
 function [tuningParams, neuronsPrefOrientation] = getTuningParams(nNeurons)
