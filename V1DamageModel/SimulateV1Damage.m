@@ -1,0 +1,422 @@
+clear all
+close all
+restoredefaultpath
+clc
+
+rng('shuffle');
+
+addpath('/Users/avinashranjan/Desktop/UT Austin/Goris lab/Model_V1_damage/V1DamageModel/Scripts/')
+
+% ----------------------------------
+% Params
+% ----------------------------------
+nNeurons     = 200; %200;   % Count of neurons, Don't set it to 361. something weird will happen
+stimDuration = 2;     % Stimulus duration set to 1 seconds
+timeStep     = 0.001; %0.001; % 0.001s (1ms) - Step size of time bins used for binning stimulus duration 
+propDamaged  = 0.8;     % Proportion of damaged neurons
+
+% Stimulus parameters (angles in radians)
+contrasts               = [0.05]; %[1e-4 0.001 0.01 0.05 0.1 0.2 0.5]; % 0.01
+spreads                 = [5]; %[3];
+uniqStimOris            = linspace(90-11, 90+11, 21); %80:0.2:100;
+uniqStimOris            = deg2rad(uniqStimOris');
+stimParam.numStim       = numel(uniqStimOris);                                % Number of unique stimuli
+stimParam.countPerStim  = 200; % 100 
+ntrials                 = stimParam.numStim * stimParam.countPerStim * numel(contrasts) * numel(spreads);  % Total number of trials
+
+[c, s, oris] = ndgrid(contrasts, spreads, uniqStimOris);
+combinations = [c(:), s(:) oris(:)];
+trlMatrix    = repmat(combinations, [stimParam.countPerStim 1]);
+
+%% TODO: do this in a loop to make sure its right
+
+trlContrastVector = trlMatrix(:, 1);
+trlSpreadVector   = trlMatrix(:, 2);
+trlStimVector     = trlMatrix(:, 3);  % Vector of stimuli
+
+% We don't want to remove stimulus driven noise correlation
+% Because of noise correlation we are in information saturation regime
+% Recovery after damage to baseline is possible because the network
+% operates in information saturation regime.
+stimNoise         = 0 + 0.1 * randn(ntrials, 1); % What is std dev here? 5.73 degrees
+noisyStimVector   = trlStimVector + stimNoise;   % Noisy stimulus vector
+noisyStimVector   = deg2rad( mod(rad2deg(noisyStimVector), 180) ); % Wrap between 0 and 180
+
+%% Damaged neurons indexes
+nrnCntDamaged = floor( propDamaged*nNeurons );
+damagedNrnIdxes = randperm(nNeurons, nrnCntDamaged);
+assert( numel(unique(damagedNrnIdxes(:))) == numel(damagedNrnIdxes) ); % Must be non repeating integers
+intactNrnIdxes = setdiff(1:nNeurons, damagedNrnIdxes);
+
+%% Tuning params
+% tmp                    = linspace(-pi, pi, 721);
+tuningFnOriSpace         = linspace(0, pi, 361); %tmp(361:end); %
+
+[tuningParams, neuronsPrefOrientation] = getTuningParams(nNeurons);
+tuningParamsV1Damaged                  = getTuningParamsV1Damaged(tuningParams, damagedNrnIdxes); % only used for generating spikes
+tuningParamsAdjusted                   = getTuningParamsAdjusted(tuningParams, intactNrnIdxes);
+
+% Tuning functions
+tuningFns         = getTuningFns(tuningParams, contrasts(1), spreads(1), tuningFnOriSpace, neuronsPrefOrientation);
+tuningFnsDamaged  = getTuningFns(tuningParamsV1Damaged, contrasts(1), spreads(1), tuningFnOriSpace, neuronsPrefOrientation);
+tuningFnsAdjusted = getTuningFns(tuningParamsAdjusted, contrasts(1), spreads(1), tuningFnOriSpace, neuronsPrefOrientation(intactNrnIdxes));
+
+timeBins          = 0:timeStep:stimDuration; 
+stimRespProfile   = 1 + zeros(1, numel(timeBins));
+
+
+%% Structure to save data
+trialDecisions           = zeros(1, ntrials);
+trialDecisionsDamaged    = zeros(1, ntrials);
+trialDecisionsAdjusted   = zeros(1, ntrials);
+trialConfs               = zeros(1, ntrials);
+trialConfsDamaged        = zeros(1, ntrials);
+trialConfsAdjusted       = zeros(1, ntrials);
+confVars                 = zeros(1, ntrials);
+confVarsDamaged          = zeros(1, ntrials);
+confVarsAdjusted         = zeros(1, ntrials);
+trialPDFs                = cell(1, ntrials);
+trialPDFsDamaged         = cell(1, ntrials);
+trialPDFsAdjusted        = cell(1, ntrials);
+spikesIntactV1           = cell(1, ntrials);
+spikesDamagedV1          = cell(1, ntrials);
+spikesAdjustedV1         = cell(1, ntrials);
+
+
+%% Loop through trial
+for trialIDx = 1:ntrials
+
+    if mod(trialIDx, stimParam.countPerStim) == 0
+        disp(trialIDx)
+    end
+    
+    % TODO: need to save spikes
+    
+    % Original V1 population
+    [spikes, pdf, ~, decision, conf, confVar] = decodeDecision( ...
+        trlContrastVector(trialIDx), ...
+        trlSpreadVector(trialIDx), ...
+        noisyStimVector(trialIDx), ...
+        neuronsPrefOrientation, ...
+        tuningParams, ...
+        stimRespProfile, ...
+        timeStep, ...
+        timeBins, ...
+        nNeurons, ...
+        stimDuration, ...
+        tuningFnOriSpace, ...
+        tuningFns);
+
+    % TODO: verify PDFs
+    %warning("Verify PDFs")
+    
+    confVars(trialIDx)       = confVar;
+    trialDecisions(trialIDx) = decision;
+    trialConfs(trialIDx)     = conf; % This will be overridden later
+    trialPDFs{trialIDx}      = pdf;
+    
+    % Bin and then save spikes, Sum within each 10-ms bin
+    binSize = 10; 
+    nBins = floor(size(spikes, 2)/binSize);
+    spikeCounts = squeeze(sum(reshape(spikes(:, 1:end-1),...
+        nNeurons,binSize,nBins),2));
+    
+    spikesIntactV1{trialIDx} = spikeCounts;
+    
+%     % Damged V1 population
+%     [spikes, pdf, ~, decision, conf] = decodeDecision( ...
+%         trlContrastVector(trialIDx), ...
+%         trlSpreadVector(trialIDx), ...
+%         noisyStimVector(trialIDx), ...
+%         neuronsPrefOrientation, ...
+%         tuningParamsV1Damaged, ... % Spikes from damaged neural population
+%         stimRespProfile, ...
+%         timeStep, ...
+%         timeBins, ...
+%         nNeurons, ...
+%         stimDuration, ...
+%         tuningFnOriSpace, ...
+%         tuningFns); % Decoding with tuning functions from original V1 population 
+%     
+%     trialDecisionsDamaged(trialIDx) = decision;
+%     trialConfsDamaged(trialIDx)     = conf;
+%     trialPDFsDamaged{trialIDx}      = pdf;
+% 
+%     % Bin and then save spikes, Sum within each 10-ms bin
+%     binSize = 10; 
+%     nBins = floor(size(spikes, 2)/binSize);
+%     spikeCounts = squeeze(sum(reshape(spikes(:, 1:end-1),...
+%         nNeurons,binSize,nBins),2));
+% 
+% %     spikesDamagedV1{trialIDx} = spikeCounts;
+%     
+%     % Adjusted V1 population (Plasticity)
+%     [spikes, pdf, ~, decision, conf] = decodeDecision( ...
+%         trlContrastVector(trialIDx), ...
+%         trlSpreadVector(trialIDx), ...
+%         noisyStimVector(trialIDx), ...
+%         neuronsPrefOrientation(intactNrnIdxes), ...
+%         tuningParamsAdjusted, ... % Spikes from adjusted neural population
+%         stimRespProfile, ...
+%         timeStep, ...
+%         timeBins, ...
+%         numel(intactNrnIdxes), ...
+%         stimDuration, ...
+%         tuningFnOriSpace, ...
+%         tuningFnsAdjusted); % Decoding with tuning functions from adjusted V1 population 
+%     
+%     trialDecisionsAdjusted(trialIDx) = decision;
+%     trialConfsAdjusted(trialIDx)     = conf;
+%     trialPDFsAdjusted{trialIDx}      = pdf;
+%     
+%     % Bin and then save spikes, Sum within each 10-ms bin
+%     binSize = 10; 
+%     nBins = floor(size(spikes, 2)/binSize);
+%     spikeCounts = squeeze(sum(reshape(spikes(:, 1:end-1),...
+%         nNeurons,binSize,nBins),2));
+% 
+% %     spikesAdjustedV1{trialIDx} = spikeCounts;
+    
+end
+
+% Generate test trials
+stimNoise         = 0 + 0.1 * randn(ntrials, 1); % What is std dev here? 5.73 degrees
+noisyStimVector   = trlStimVector + stimNoise;   % Noisy stimulus vector
+noisyStimVector   = deg2rad( mod(rad2deg(noisyStimVector), 180) ); % Wrap between 0 and 180
+
+trialDecisionsTest           = zeros(1, ntrials);
+trialConfsTest               = zeros(1, ntrials);
+trialConfVarsTest            = zeros(1, ntrials);
+spikesIntactV1Test           = cell(1, ntrials);
+trialPDFsTest                = cell(1, ntrials);
+
+for trialIDx = 1:ntrials
+
+    if mod(trialIDx, stimParam.countPerStim) == 0
+        disp(trialIDx)
+    end
+    
+    % TODO: need to save spikes
+    
+    % Original V1 population
+    [spikes, pdf, ~, decision, conf, confVar] = decodeDecision( ...
+        trlContrastVector(trialIDx), ...
+        trlSpreadVector(trialIDx), ...
+        noisyStimVector(trialIDx), ...
+        neuronsPrefOrientation, ...
+        tuningParams, ...
+        stimRespProfile, ...
+        timeStep, ...
+        timeBins, ...
+        nNeurons, ...
+        stimDuration, ...
+        tuningFnOriSpace, ...
+        tuningFns);
+
+    % TODO: verify PDFs
+    %warning("Verify PDFs")
+    
+    trialDecisionsTest(trialIDx) = decision;
+    trialConfsTest(trialIDx)     = conf;
+    trialPDFsTest{trialIDx}      = pdf;
+    trialConfVarsTest(trialIDx)  = confVar;
+
+    % Bin and then save spikes, Sum within each 10-ms bin
+    binSize = 10; 
+    nBins = floor(size(spikes, 2)/binSize);
+    spikeCounts = squeeze(sum(reshape(spikes(:, 1:end-1),...
+        nNeurons,binSize,nBins),2));
+    
+    spikesIntactV1Test{trialIDx} = spikeCounts;
+end
+
+%% Save data
+
+% Compute trial confidence
+Cc                            = median(confVars); % x = confVars(trlStimVector == pi/2); 
+trialConfs                    = confVars > Cc;
+
+data.trialDecisions           = trialDecisions;
+data.trialDecisionsDamaged    = trialDecisionsDamaged;
+data.trialDecisionsAdjusted   = trialDecisionsAdjusted;
+data.trialConfs               = trialConfs;
+data.trialConfsDamaged        = trialConfsDamaged;
+data.trialConfsAdjusted       = trialConfsAdjusted;
+data.confVars                 = confVars;
+data.trialPDFs                = trialPDFs;
+data.trialPDFsDamaged         = trialPDFsDamaged;
+data.trialPDFsAdjusted        = trialPDFsAdjusted;
+data.trlContrastVector        = trlContrastVector;
+data.trlSpreadVector          = trlSpreadVector;
+data.trlStimVector            = trlStimVector;  % Vector of stimuli
+data.noisyStimVector          = noisyStimVector;
+data.spikesIntactV1           = spikesIntactV1;
+data.spikesDamagedV1          = spikesDamagedV1;
+data.spikesAdjustedV1         = spikesAdjustedV1;
+data.neuronsPrefOrientation   = neuronsPrefOrientation;
+data.uniqStimOris             = uniqStimOris;
+data.nNeurons                 = nNeurons;   
+data.stimDuration             = stimDuration;     
+data.timeStep                 = timeStep; 
+data.propDamaged              = propDamaged;    
+data.numStim                  = stimParam.numStim;                              
+data.countPerStim             = stimParam.countPerStim;
+data.damagedNrnIdxes          = damagedNrnIdxes;
+data.intactNrnIdxes           = intactNrnIdxes;
+
+save('SpikeData.mat', 'data');
+
+% Compute trial confidence
+Cc                            = median(trialConfVarsTest); % x = trialConfVarsTest(trlStimVector == pi/2); 
+trialConfsTest                = trialConfVarsTest > Cc;
+
+dataTest.trialDecisionsTest       = trialDecisionsTest;
+dataTest.trialConfsTest           = trialConfsTest;
+dataTest.trialPDFsTest            = trialPDFsTest;
+dataTest.spikesIntactV1Test       = spikesIntactV1Test;
+
+save('SpikeDataTest.mat', 'dataTest');
+
+%% Utility function
+function [tuningParams, neuronsPrefOrientation] = getTuningParams(nNeurons)
+    
+    % Neurons tuning parameters
+    tuningParams.d     = zeros(nNeurons, 1) + 0;   % (fixed) Direction selectivity - set it to zero (no need for neuron to be directional selective).
+    tuningParams.alpha = zeros(nNeurons, 1) + 2;   % (fixed) Aspect ratio - controls sharpness. Keep this fixed. Reducing the value makes the changes very rapid towards the end which we probably don't want.
+    tuningParams.b     = zeros(nNeurons, 1) + 2;   % (fixed maybe/variable - (0.5, some max - 3, 4 ...)) Control this - Control sharpness + range of the neuron. Set it to 2 for these simulations
+    tuningParams.q     = zeros(nNeurons, 1) + 2;   % 1 or 2?? (variable) Set it to some constant. Controls the sharpness and amplitude of peak FR.
+    tuningParams.w     = zeros(nNeurons, 1) + 0;   % 0 or 1?? Doesn't matter since untuned component is zero. Weight of untuned filter. Set it to 0. (fixed) Doesn't matter what is val is becz untuned filter amp is zero.
+    tuningParams.e1    = zeros(nNeurons, 1);       % Stimulus independent spontaneous discharge (variable) Controls dynamic range.
+    tuningParams.e2    = zeros(nNeurons, 1);       % Stimulus dependent spontaneous discharge (variable) Controls dynamic range.
+    tuningParams.gam   = zeros(nNeurons, 1);       % Controls response amplitude (variable) Controls dynamic range.
+    tuningParams.beta  = zeros(nNeurons, 1) + 0;   % Stimulus independent constant (variable) Controls dynamic range.
+    tuningParams.UNTUNED_FILTER_AMPL = 0;          % (fixed) Untuned filter not needed.
+    tuningParams.eps   = 0;                        % (this probably needs to be sampled every trial??) Not right place to update here Normalization noise sampled from some distribution with sigma_g standard deviation
+    
+    tuningParams.alpha(:)   = 2; % Keep it constant to avoid assertion error % 1 + 5*rand(1, nNeurons);  Aspect ratio uniformly sampled from 0 - 5
+    tuningParams.b(:)       = 2; % Keep it constant to avoid assertion error % Derivative order - Just set it 2 (Zoey's paper). Non integer vaalues can give imaginary values. More like log uniform 0.0125 + 8*rand(1, nNeurons); 
+    tuningParams.q(:)       = exp( log(1.8)*rand(nNeurons, 1) );  % Transduction (this is not uniformly distributed) exp( log(1.8)*rand(1, nNeurons) )
+    tuningParams.beta(:)    = lognrnd(2.5, 0.5, nNeurons, 1);     % lognrnd(2.5, 0.5, 1, nNeurons);     % Normalization constant lognrnd(mu, sigma, 1, nneurons)
+    
+    tuningParams.e1(:)        = lognrnd(0.8, 0.6, nNeurons, 1);       % Range: 0 - 10 ips, Might not be correct initilization
+    tuningParams.gam(:)       = 4000;
+    
+    
+    % Sample preferred orientation.
+    % Choose orientations from tuning fn orientations to avoid any
+    % numerical issues
+    % idx                       = randperm(numel(tuningFnOriSpace), nNeurons);
+    % samples                   = tuningFnOriSpace(idx);
+    %neuronsPrefOrientation(:) = samples; %pi * rand(nNeurons, 1);        % Randomly choose neurons preferred orientation from 0 to pi (not directional selective)
+    
+    neuronsPrefOrientation    = zeros(nNeurons, 1);
+    neuronsPrefOrientation(:) = pi * rand(nNeurons, 1);
+end
+
+% beta and e1
+
+function [tuningParamsV1Damaged] = getTuningParamsV1Damaged(tuningParams, damagedNrnIdxes)
+
+    tuningParamsV1Damaged = tuningParams; % Make sure it creates a copy
+    
+    % For damaged model, evoked activity for damaged neurons is set to zero.
+    tuningParamsV1Damaged.gam(damagedNrnIdxes) = 0;               % Evoked activity set to zero for damaged neuron
+
+end
+
+function [tuningParamsAdjusted] = getTuningParamsAdjusted(tuningParams, intactNrnIdxes)
+    % Remove damaged neurons altogether
+
+    % Tuning params just for intact neurons
+    tuningParamsAdjusted.d     = tuningParams.d(intactNrnIdxes);                      % Direction selectivity (fixed at 0)
+    tuningParamsAdjusted.alpha = tuningParams.alpha(intactNrnIdxes);              % Aspect ratio (fixed at 2)
+    tuningParamsAdjusted.b     = tuningParams.b(intactNrnIdxes);                      % Controls sharpness of tuning curve (fixed at 2)
+    tuningParamsAdjusted.q     = tuningParams.q(intactNrnIdxes);                      % Controls amplitude of peak firing rate (variable)
+    tuningParamsAdjusted.w     = tuningParams.w(intactNrnIdxes);                      % Unused parameter (set to 1)
+    tuningParamsAdjusted.e1    = tuningParams.e1(intactNrnIdxes);         % Stimulus independent spontaneous discharge (variable) Controls dynamic range.
+    tuningParamsAdjusted.e2    = tuningParams.e2(intactNrnIdxes);       % Stimulus dependent spontaneous discharge (variable) Controls dynamic range.
+    tuningParamsAdjusted.gam   = tuningParams.gam(intactNrnIdxes);        % Controls response amplitude (variable) Controls dynamic range.
+    tuningParamsAdjusted.beta  = tuningParams.beta(intactNrnIdxes);     % Stimulus independent constant (variable) Controls dynamic range.
+    tuningParamsAdjusted.eps   = tuningParams.eps;                        % (this probably needs to be sampled every trial??) Not right place to update here Normalization noise sampled from some distribution with sigma_g standard deviation
+    
+    tuningParamsAdjusted.UNTUNED_FILTER_AMPL = tuningParams.UNTUNED_FILTER_AMPL;  % Untuned filter amplitude (fixed at 0)
+    
+end
+
+function tuningFns = getTuningFns(tuningParams, contrast, spread, ...
+    tuningFnOriSpace, ...
+    neuronsPrefOrientation)
+       
+    tuningFns = [];
+
+    for oIdx = 1:numel(tuningFnOriSpace)
+        
+        % Get tuning params every trial
+        stimParams.contrastLevel = contrast;
+        stimParams.spreadLevel   = deg2rad(spread); % very important
+        stimParams.stimOri       = tuningFnOriSpace(oIdx);
+        
+        tFn = getOriTunedStimRespFunction( ...
+                neuronsPrefOrientation, tuningParams, stimParams);
+        firingRates = tFn.FR; % Firing rate for this trial
+        
+        tuningFns = [tuningFns firingRates];
+    end
+    
+end
+
+function [spikes, pdf, thetaMLE, decision, conf, confVar] = decodeDecision( ...
+    trlContrast, ...
+    trlSpread, ...
+    noisyStim, ...
+    neuronsPrefOrientation, ...
+    tuningParams, ...
+    stimRespProfile, ...
+    timeStep, ...
+    timeBins, ...
+    nNeurons, ...
+    stimDuration, ...
+    tuningFnOriSpace, ...
+    tuningFns)
+
+    % Get tuning params every trial
+    stimParams.contrastLevel = trlContrast; %0.01 0.04 0.1 Use these two values. Saturation happens pretty quickly
+    stimParams.spreadLevel   = deg2rad(trlSpread);
+    stimParams.stimOri       = noisyStim;
+    
+    tFn = getOriTunedStimRespFunction( ...
+            neuronsPrefOrientation, tuningParams, stimParams);
+    firingRates = tFn.FR; % Firing rate for this trial
+    trlStimResponse = firingRates.*stimRespProfile;
+    
+    % Generate modulated Poisson spikes for each trial
+    % Output:
+    %  - spikes: spike trains for each neuron in the trial
+    %  - modStimResponse: modified stimulus response after gain modulation
+    params = struct();
+    params.timeStep = timeStep;
+    params.timeBins = timeBins;
+    params.nNeurons = nNeurons;
+    [spikes, ~] = generateModulatedPoissonSpikes(trlStimResponse, 1, params);
+    
+    % STEP 4: Decode the stimulus orientation based on the spike trains
+    % Output:
+    %  - thetaMLE: maximum likelihood estimate of stimulus orientation based on spikes
+    %  - decodingError: error between decoded orientation and actual stimulus
+    params.stimDuration = stimDuration;
+    params.uniqStimOris = tuningFnOriSpace;
+    
+    % Poisson decoder
+    [thetaMLE, pdf, metrics] = decodePoissonSpikes( ...
+        spikes, tuningFns, params);
+    confVar  = abs( rad2deg(thetaMLE) - 90) / rad2deg(metrics.sigma);
+    c_criteria = 0.23; %0.08; %1.5; %75; %1.5; % 1.5
+    
+    decision = (thetaMLE >= pi/2)*(1) + (thetaMLE < pi/2)*(-1); 
+    conf = confVar > c_criteria;
+
+%     if decision == 1
+%         keyboard
+%     end
+end
+
